@@ -1,0 +1,5 @@
+## Interface: 30300
+## Title: BG Guilds - Data
+## Notes: Character to guild snapshot from the Warmane armory. Replace this folder to update.
+## Version: 2026-11-10
+Data.lua
