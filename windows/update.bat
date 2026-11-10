@@ -7,7 +7,11 @@ set "LOG=%HOME_DIR%\update.log"
 set "BASE=https://github.com/__REPO__/releases/latest/download"
 set "WORK=%TEMP%\BGGuilds-update"
 
-if not exist "%HOME_DIR%\wowdir.txt" exit /b 1
+if not exist "%HOME_DIR%" mkdir "%HOME_DIR%"
+if not exist "%HOME_DIR%\wowdir.txt" (
+  >>"%LOG%" echo %DATE% %TIME% not set up: run install-updater.bat from your WoW folder
+  exit /b 1
+)
 set /p WOW=<"%HOME_DIR%\wowdir.txt"
 set "ADDONS=%WOW%\Interface\AddOns"
 if not exist "%WOW%\Wow.exe" (
@@ -28,8 +32,14 @@ set "REMOTE="
 set /p REMOTE=<"%WORK%\version.txt"
 set "LOCAL="
 if exist "%ADDONS%\BGGuilds_Data\version.txt" set /p LOCAL=<"%ADDONS%\BGGuilds_Data\version.txt"
-if "%REMOTE%"=="" goto :done
-if "%REMOTE%"=="%LOCAL%" goto :done
+if "%REMOTE%"=="" (
+  >>"%LOG%" echo %DATE% %TIME% empty version file from GitHub, kept current version
+  goto :done
+)
+if "%REMOTE%"=="%LOCAL%" (
+  >>"%LOG%" echo %DATE% %TIME% up to date %LOCAL%
+  goto :done
+)
 
 curl.exe -fsSL --max-time 180 -o "%WORK%\BGGuilds.zip" "%BASE%/BGGuilds.zip"
 if errorlevel 1 (

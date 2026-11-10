@@ -42,6 +42,9 @@ if exist "%WOW%\Interface\AddOns\BGGuilds_Data\Data.lua" (
 )
 
 echo.
+echo  Updater log (last lines):
+powershell -NoProfile -Command "Get-Content -Path ($env:APPDATA + '\BGGuilds\update.log') -Tail 3"
+echo.
 choice /c YN /m " Also put a 'Play WoW' file on your desktop that updates first, then starts WoW"
 if errorlevel 2 goto :end
 for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP=%%D"
@@ -59,7 +62,8 @@ exit /b
 :nowow
 echo  Wow.exe is not in this folder:
 echo    "%WOW%"
-echo  Move install-updater.bat and update.bat into your WoW folder, next to Wow.exe, and run it again.
+echo  If you opened it straight from the zip, extract the zip first: right-click it, "Extract All...",
+echo  pick your WoW folder (the one with Wow.exe), then run install-updater.bat from there.
 goto :end
 
 :readonly
