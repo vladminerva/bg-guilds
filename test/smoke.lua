@@ -33,6 +33,8 @@ local kind = "pvp"
 IsInInstance = function() return true, kind end
 GetNumRaidMembers = function() return 0 end
 UNKNOWNOBJECT = "Unknown"
+UnitClass = function() return "Warrior", "WARRIOR" end
+UnitLevel = function() return 80 end
 
 dofile(arg[1] .. "/addon/BGGuilds_Data/Data.lua")
 local scores = { "Eyesx", "Nobodyhere", "Livetarget", "Abayka" }   -- Abayka: Oathbroken on Lordaeron only -> must be blank
@@ -76,4 +78,30 @@ assert(cell(7) == "", "stranger blank")
 SlashCmdList.BGGUILDS("demo")
 assert(GetBattlefieldScore == realScore, "demo restored API")
 SlashCmdList.BGGUILDS("")
-print("SMOKE OK")
+print("SMOKE OK v0.2")
+
+-- ---- v0.3: richer sightings, /who, /bgg new, sightings_to_seeds
+UnitClass = function() return "Warrior", "WARRIOR" end
+UnitLevel = function() return 80 end
+GetGuildInfo = function() return "Seen Live Guild" end
+ev.scripts.OnEvent(ev, "PLAYER_TARGET_CHANGED")
+local e = BGGuildsCache.Icecrown.Livetarget
+assert(e.g == "Seen Live Guild" and e.c == "WARRIOR" and e.l == 80 and e.f and e.t, "rich sighting")
+GetGuildInfo = function() return "Edora" end
+ev.scripts.OnEvent(ev, "PLAYER_TARGET_CHANGED")
+assert(e.g == "Edora" and e.pg == "Seen Live Guild" and e.pt, "guild change tracked")
+-- /who: Eyesx shows up in a different guild -> switched; Whoguy in an unknown guild -> new
+GetNumWhoResults = function() return 3 end
+local who = { {"Eyesx","Brand New Guild",80,"Human","Warrior","Dalaran","WARRIOR"},
+              {"Whoguy","Brand New Guild",79,"Orc","Shaman","Dalaran","SHAMAN"},
+              {"Noguild","",80,"Orc","Mage","Dalaran","MAGE"} }
+GetWhoInfo = function(i) return unpack(who[i]) end
+ev.scripts.OnEvent(ev, "WHO_LIST_UPDATE")
+assert(BGGuildsCache.Icecrown.Whoguy.l == 79 and BGGuildsCache.Icecrown.Whoguy.c == "SHAMAN", "who captured")
+assert(BGGuildsCache.Icecrown.Noguild == nil, "guildless who ignored")
+SlashCmdList.BGGUILDS("new")
+-- write a SavedVariables-style file and run the merge script on it
+local f = io.open("/tmp/bgg-sv-test.lua", "w")
+f:write('BGGuildsCache = { ["Icecrown"] = { ["Whoguy"] = { ["g"] = "Brand New Guild", ["t"] = 1 }, ["Eyesx"] = { ["g"] = "I N V I N C I B L E", ["t"] = 1 } }, ["Lordaeron"] = { ["X"] = { ["g"] = "Oathbroken", ["t"] = 1 } } }\n')
+f:close()
+print("SMOKE OK v0.3")

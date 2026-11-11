@@ -1,4 +1,4 @@
--- BG Guilds 0.2.0 for WotLK 3.3.5a (Warmane)
+-- BG Guilds 0.3.0 for WotLK 3.3.5a (Warmane)
 -- Adds a Guild column to the battleground scoreboard (10v10, 15v15, 40v40; scrolls with it).
 -- Sources, best first: seen live in game (cache) > armory snapshot (BGGuilds_Data).
 -- Only certain matches are shown; players we don't know get an empty cell.
@@ -49,6 +49,26 @@ end
 
 -- ---------------------------------------------------------------- learning from live units
 
+-- Every sighting is kept in SavedVariables (WTF\Account\<acc>\SavedVariables\BGGuilds.lua):
+--   BGGuildsCache[realm][name] = { g = guild, t = last seen, f = first seen, c = class, l = level,
+--                                  pg = previous guild, pt = when it changed }
+-- crawl/sightings_to_seeds.lua turns that file into new guilds to crawl.
+local function record(realm, name, g, class, level)
+  BGGuildsCache[realm] = BGGuildsCache[realm] or {}
+  local now = time()
+  local e = BGGuildsCache[realm][name]
+  if not e then
+    e = { g = g, f = now }
+    BGGuildsCache[realm][name] = e
+  elseif e.g ~= g then
+    e.pg, e.pt, e.g = e.g, now, g
+  end
+  e.t = now
+  e.f = e.f or now
+  if class then e.c = class end
+  if level and level > 0 then e.l = level end
+end
+
 local function learn(unit)
   if not UnitExists(unit) or not UnitIsPlayer(unit) then return end
   local name, realm = UnitName(unit)
@@ -56,9 +76,16 @@ local function learn(unit)
   if not realm or realm == "" then realm = myRealm end
   local g = GetGuildInfo(unit)
   if not g then return end   -- nil = guildless OR not loaded yet; only record positives
-  BGGuildsCache[realm] = BGGuildsCache[realm] or {}
-  local e = BGGuildsCache[realm][name]
-  if e and e.g == g then e.t = time() else BGGuildsCache[realm][name] = { g = g, t = time() } end
+  local _, class = UnitClass(unit)
+  record(realm, name, g, class, UnitLevel(unit))
+end
+
+-- /who results the player asked for themselves (never sent automatically)
+local function learnWho()
+  for i = 1, GetNumWhoResults() do
+    local name, guild, level, _, _, _, class = GetWhoInfo(i)
+    if name and guild and guild ~= "" then record(myRealm, name, guild, class, level) end
+  end
 end
 
 local function scanRaid()
@@ -158,6 +185,7 @@ ev:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 ev:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 ev:RegisterEvent("PLAYER_TARGET_CHANGED")
 ev:RegisterEvent("PLAYER_FOCUS_CHANGED")
+ev:RegisterEvent("WHO_LIST_UPDATE")
 
 ev:SetScript("OnEvent", function(self, event)
   if event == "PLAYER_LOGIN" then
@@ -175,15 +203,48 @@ ev:SetScript("OnEvent", function(self, event)
     learn("target")
   elseif event == "PLAYER_FOCUS_CHANGED" then
     learn("focus")
+  elseif event == "WHO_LIST_UPDATE" then
+    learnWho()
   end
 end)
 
 -- ---------------------------------------------------------------- slash
 
+local function say(text) print("|cffffcc00BG Guilds:|r " .. text) end
+
+-- Guilds seen in game that the armory data doesn't have yet, and players who changed guild.
+local function reportNew()
+  local db = BGGuilds_DB
+  local known = {}
+  if db then for _, idx in pairs(db.realms[myRealm] or {}) do known[db.guilds[idx]] = true end end
+  local newGuilds, switched, nNew = {}, {}, 0
+  for name, e in pairs(BGGuildsCache[myRealm] or {}) do
+    if not known[e.g] then
+      if not newGuilds[e.g] then nNew = nNew + 1 end
+      newGuilds[e.g] = (newGuilds[e.g] or 0) + 1
+    end
+    local dbg = dbGet(name, myRealm)
+    if dbg and dbg ~= e.g then switched[#switched + 1] = name .. ": " .. dbg .. " -> " .. e.g end
+  end
+  local list = {}
+  for g, c in pairs(newGuilds) do list[#list + 1] = { g = g, c = c } end
+  table.sort(list, function(a, b) if a.c ~= b.c then return a.c > b.c end return a.g < b.g end)
+  say(("%d guilds seen on %s that aren't in the data yet:"):format(nNew, tostring(myRealm)))
+  for i = 1, math.min(#list, 15) do print(("   %s  (%d seen)"):format(list[i].g, list[i].c)) end
+  if #list > 15 then print(("   ...and %d more"):format(#list - 15)) end
+  say(("%d players changed guild since the armory data:"):format(#switched))
+  table.sort(switched)
+  for i = 1, math.min(#switched, 10) do print("   " .. switched[i]) end
+  if #switched > 10 then print(("   ...and %d more"):format(#switched - 10)) end
+  say("all of it is saved when you log out or /reload.")
+end
+
 SLASH_BGGUILDS1 = "/bgg"
 SlashCmdList.BGGUILDS = function(msg)
   msg = (msg or ""):lower()
-  if msg == "demo" then
+  if msg == "new" then
+    reportNew()
+  elseif msg == "demo" then
     if demo then stopDemo()
     elseif inBG then print("|cffffcc00BG Guilds:|r you're in a battleground, just open the scoreboard.")
     else startDemo() end
@@ -191,7 +252,7 @@ SlashCmdList.BGGUILDS = function(msg)
     local live = 0
     for _, t in pairs(BGGuildsCache) do for _ in pairs(t) do live = live + 1 end end
     local db = BGGuilds_DB
-    print(("|cffffcc00BG Guilds:|r armory data %s (%d characters), %d seen live, realm %s. /bgg demo to preview."):format(
+    print(("|cffffcc00BG Guilds:|r armory data %s (%d characters), %d seen live, realm %s. /bgg demo to preview, /bgg new for new guilds."):format(
       db and db.version or "missing", db and db.count or 0, live, tostring(myRealm)))
   end
 end

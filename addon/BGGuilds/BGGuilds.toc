@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: BG Guilds
 ## Notes: Shows which guild every player in your battleground is in.
-## Version: 0.2.0
+## Version: 0.3.0
 ## OptionalDeps: BGGuilds_Data
 ## SavedVariables: BGGuildsCache, BGGuildsSettings
 BGGuilds.lua
